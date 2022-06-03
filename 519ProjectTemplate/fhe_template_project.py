@@ -3,7 +3,6 @@ from eva.ckks import CKKSCompiler
 from eva.seal import generate_keys
 from eva.metric import valuation_mse
 import timeit
-import networkx as nx
 from random import random
 from itertools import combinations
 from math import inf
@@ -32,50 +31,16 @@ class TOW:
                 return sol
         return None # Error
 
-# Using networkx, generate a random graph
-# You can change the way you generate the graph
-def generateGraph(n, k, p):
-    #ws = nx.cycle_graph(n)
-    ws = nx.watts_strogatz_graph(n,k,p)
-    return ws
-
-# If there is an edge between two vertices its weight is 1 otherwise it is zero
-# You can change the weight assignment as required
-# Two dimensional adjacency matrix is represented as a vector
-# Assume there are n vertices
-# (i,j)th element of the adjacency matrix corresponds to (i*n + j)th element in the vector representations
-def serializeGraphZeroOne(GG,vec_size):
-    n = GG.size()
-    graphdict = {}
-    g = []
-    for row in range(n):
-        for column in range(n):
-            if GG.has_edge(row, column) or row==column: # I assumed the vertices are connected to themselves
-                weight = 1
-            else:
-                weight = 0 
-            g.append( weight  )  
-            key = str(row)+'-'+str(column)
-            graphdict[key] = [weight] # EVA requires str:listoffloat
-    # EVA vector size has to be large, if the vector representation of the graph is smaller, fill the eva vector with zeros
-    for i in range(vec_size - n*n): 
-        g.append(0.0)
-    return g, graphdict
-
-# To display the generated graph
-def printGraph(graph,n):
-    for row in range(n):
-        for column in range(n):
-            print("{:.5f}".format(graph[row*n+column]), end = '\t')
-        print() 
-
 # Eva requires special input, this function prepares the eva input
 # Eva will then encrypt them
 def prepareInput(n, m):
+    arr = []
+    for _ in range(n):
+        arr.append(random() * 10) # Random float between 0-10
+    pad = [0] * (m - n)
+
     input = {}
-    GG = generateGraph(n,3,0.5)
-    graph, graphdict = serializeGraphZeroOne(GG,m)
-    input['Graph'] = graph
+    input['Graph'] = arr + pad
     return input
 
 # This is the dummy analytic service
@@ -124,7 +89,7 @@ def simulate(n):
     inputs = prepareInput(n, m)
 
     global graphSize
-    gs = n*n
+    gs = n
     graphSize = gs
 
     tow = TOW()
@@ -148,7 +113,7 @@ def simulate(n):
             graph = Input('Graph')
             reval = graphanalticprogram(graph)
             Output('ReturnedValue', reval)
-        print(f"Program Driver Done")
+        #print(f"Program Driver Done")
 
         prog = graphanaltic
         prog.set_output_ranges(30)
@@ -158,32 +123,32 @@ def simulate(n):
         compiler = CKKSCompiler(config=config)
         compiled_multfunc, params, signature = compiler.compile(prog)
         compiletime += (timeit.default_timer() - start) * 1000.0 #ms
-        print(f"Compiler Done")
+        #print(f"Compiler Done")
 
         start = timeit.default_timer()
         public_ctx, secret_ctx = generate_keys(params)
         keygenerationtime += (timeit.default_timer() - start) * 1000.0 #ms
-        print(f"Key Generation Done")
+        #print(f"Key Generation Done")
         
         start = timeit.default_timer()
         encInputs = public_ctx.encrypt(inputs, signature)
         encryptiontime += (timeit.default_timer() - start) * 1000.0 #ms
-        print(f"Encryption Done")
+        #print(f"Encryption Done")
 
         start = timeit.default_timer()
         encOutputs = public_ctx.execute(compiled_multfunc, encInputs)
         executiontime += (timeit.default_timer() - start) * 1000.0 #ms
-        print(f"Execution Done")
+        #print(f"Execution Done")
 
         start = timeit.default_timer()
         outputs = secret_ctx.decrypt(encOutputs, signature)
         decryptiontime += (timeit.default_timer() - start) * 1000.0 #ms
-        print(f"Decryption Done")
+        #print(f"Decryption Done")
 
         start = timeit.default_timer()
         reference = evaluate(compiled_multfunc, inputs)
         referenceexecutiontime += (timeit.default_timer() - start) * 1000.0 #ms
-        print(f"Evaluation Done")
+        #print(f"Evaluation Done")
 
         mse += valuation_mse(outputs, reference) # since CKKS does approximate computations, this is an important measure that depicts the amount of error
 
@@ -203,15 +168,15 @@ def simulate(n):
 
 
 if __name__ == "__main__":
-    simcnt = 3 #The number of simulation runs, set it to 3 during development otherwise you will wait for a long time
+    simcnt = 100 #The number of simulation runs, set it to 3 during development otherwise you will wait for a long time
     # For benchmarking you must set it to a large number, e.g., 100
     #Note that file is opened in append mode, previous results will be kept in the file
     resultfile = open("results.csv", "a")  # Measurement results are collated in this file for you to plot later on
-    resultfile.write("NodeCount,PathLength,SimCnt,CompileTime,KeyGenerationTime,EncryptionTime,ExecutionTime,DecryptionTime,ReferenceExecutionTime,Mse\n")
+    resultfile.write("NodeCount,SimCnt,CompileTime,KeyGenerationTime,EncryptionTime,ExecutionTime,DecryptionTime,ReferenceExecutionTime,Mse\n")
     resultfile.close()
     
     print("Simulation campaing started:")
-    for nc in range(4,64,4): # Node counts for experimenting various graph sizes
+    for nc in range(5,15,1): # Node counts for experimenting various graph sizes
         n = nc
         resultfile = open("results.csv", "a") 
         for i in range(simcnt):
