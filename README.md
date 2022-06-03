@@ -13,4 +13,4 @@ Algorithm under homomorphic encryption works basically:
   8. Process continues until all subsets are considered.
   9. Finally trusted third party sends back the index and server/client can regenerate subset with it.
 
-The code itself does not clearly differenciate between client, server and trusted third party and they are considered more like a concept.
+The code itself does not clearly differentiate between client, server and trusted third party and they are considered more like a concept.
